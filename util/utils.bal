@@ -1,7 +1,20 @@
 import daos;
+import ballerina/http;
 import ballerina/system;
 import ballerina/time;
 import ballerina/log;
+
+int appointmentNo = 1;
+
+public function sendResponse(http:Caller caller, json|string payload, int statusCode = 200) {
+    http:Response response = new;
+    response.setPayload(untaint payload);
+    response.statusCode = statusCode;
+    var result = caller->respond(response);
+    if (result is error) {
+        log:printError("Error sending response.", err = result);
+    }
+}
 
 public function containsStringElement(string[] arr, string element) returns boolean {
     foreach var item in arr {
@@ -30,7 +43,8 @@ public function convertJsonToStringArray(json[] array) returns string[] {
     return result;
 }
 
-public function createNewPaymentEntry(daos:PaymentSettlement paymentSettlement, daos:HealthcareDao healthcareDao) returns daos:Payment | error {
+public function createNewPaymentEntry(daos:PaymentSettlement paymentSettlement, daos:HealthcareDao healthcareDao) 
+                                            returns daos:Payment | error {
     int discount = check checkForDiscounts(<string>paymentSettlement["patient"]["dob"]);
     string doctorName = <string>paymentSettlement["doctor"]["name"];
     daos:Doctor doctor = check daos:findDoctorByNameFromHelathcareDao(healthcareDao, doctorName);
@@ -49,9 +63,8 @@ public function createNewPaymentEntry(daos:PaymentSettlement paymentSettlement, 
     return payment;
 }
 
-int appointmentNo = 1;
-
-public function makeNewAppointment(daos:AppointmentRequest appointmentRequest, daos:HospitalDAO hospitalDao) returns daos:Appointment | daos:DoctorNotFoundError {
+public function makeNewAppointment(daos:AppointmentRequest appointmentRequest, daos:HospitalDAO hospitalDao) 
+                                            returns daos:Appointment | daos:DoctorNotFoundError {
     var doc = daos:findDoctorByName(hospitalDao, appointmentRequest.doctor);
     if (doc is daos:DoctorNotFoundError) {
         return doc;
@@ -102,13 +115,11 @@ public function checkDiscountEligibility(string dob) returns boolean | error {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
+public function containsAppointmentId(map<daos:Appointment> appointmentsMap, string id) returns boolean {
+    foreach (string, daos:Appointment) (k, v) in appointmentsMap {
+        if (k.equalsIgnoreCase(id)) {
+            return true;
+        }
+    }
+    return false;
+}
