@@ -2,7 +2,7 @@ type DoctorNotFoundError error<string>;
 
 public type HealthcareDao record {
     Doctor[] doctorsList = [];
-    string[] catergories = [];
+    string[] categories = [];
     map<Payment> payments = {};
 };
 
@@ -48,7 +48,6 @@ public function findDoctorByNameFromHelathcareDao(HealthcareDao healthcareDao, s
             return doctor;
         }
     }
-    string errorReason = "Doctor Not Found: " + name;
-    DoctorNotFoundError docNotFoundError = error(errorReason);
+    DoctorNotFoundError docNotFoundError = error("Doctor Not Found: " + name);
     return docNotFoundError;
 }

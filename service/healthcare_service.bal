@@ -7,29 +7,35 @@ import util;
 
 listener http:Listener httpListener = new(9090);
 
-daos:HealthcareDao healthcareDao = {
-    doctorsList: [
-    { name: "thomas collins", hospital: "grand oak community hospital", category: "surgery", availability: "9.00 a.m - 11.00 a.m", fee: 7000},
-    { name: "henry parker", hospital: "grand oak community hospital", category: "ent", availability: "9.00 a.m - 11.00 a.m", fee: 4500},
-    { name: "abner jones", hospital: "grand oak community hospital", category: "gynaecology", availability: "8.00 a.m - 10.00 a.m", fee: 11000},
-    { name: "abner jones", hospital: "grand oak community hospital", category: "ent", availability: "9.00 a.m - 11.00 a.m", fee: 6750},
-    { name: "anne clement", hospital: "clemency medical center", category: "surgery", availability: "9.00 a.m - 11.00 a.m", fee: 12000}
-    ],
-    catergories: ["surgery", "cardiology", "gynaecology", "ent", "paediatric"],
-    payments: {
-
-    }
-};
-
-map<daos:Appointment> appointments = {
-
-};
-
-// RESTful service.
 @http:ServiceConfig {
     basePath: "/healthcare"
 }
 service HealthcareService on httpListener {
+
+    ClemencyHospitalService clemency = new;
+    GrandOakHospitalService grandoaks = new;
+    PineValleyHospitalService pinevalley = new;
+    WillowGardensHospitalService willowgarden = new;
+
+    daos:HealthcareDao healthcareDao = {
+        doctorsList: [
+            clemency.doctor1, 
+            clemency.doctor2, 
+            clemency.doctor3,
+            grandoaks.doctor1, 
+            grandoaks.doctor2, 
+            grandoaks.doctor3,
+            grandoaks.doctor4, 
+            pinevalley.doctor1, 
+            pinevalley.doctor2,
+            willowgarden.doctor1, 
+            willowgarden.doctor2
+        ],
+        categories: ["surgery", "cardiology", "gynaecology", "ent", "paediatric"],
+        payments: {}
+    };
+
+    map<daos:Appointment> appointments = {};
 
     @http:ResourceConfig {
         methods: ["GET"],
@@ -37,97 +43,87 @@ service HealthcareService on httpListener {
     }
     resource function reserveAppointment(http:Caller caller, http:Request req, string category) {
         http:Response response = new;
-        daos:Doctor[] stock = daos:findDoctorByCategoryFromHealthcareDao(untaint healthcareDao, category);
-        var payload = json.convert(stock);
-        if (payload is json) {
-            response.setJsonPayload(untaint payload);
-            sendResponse(caller, response);
+        daos:Doctor[] stock = daos:findDoctorByCategoryFromHealthcareDao(self.healthcareDao, category);
+        if(stock.length() > 0) {
+            var payload = json.convert(stock);
+            if (payload is json) {
+                util:sendResponse(caller, payload);
+            } else {
+                log:printError("Error occurred when converting appointment record to JSON.", err = payload);
+                util:sendResponse(caller, json.convert("Internal error occurred."), 
+                                                    statusCode = http:INTERNAL_SERVER_ERROR_500);
+            }
         } else {
-            response.statusCode = 502;
-            response.setPayload("Invalid payload received");
-            sendResponse(caller, response);
+            util:sendResponse(caller, "Could not find any entry for the requested Category");
         }
     }
 
     @http:ResourceConfig {
         methods: ["GET"],
-        path: "/appointments/{appointment_id}"
+        path: "/appointments/{appointmentId}"
     }
-    resource function getAppointment(http:Caller caller, http:Request req, string id) {
-        http:Response response = new;
-        // HospitalService hospitalService = new;
-        daos:Appointment? appointment = appointments[id];
+    resource function getAppointment(http:Caller caller, http:Request req, int appointmentId) {
+        daos:Appointment? appointment = self.appointments[string.convert(appointmentId)];
         if (appointment is daos:Appointment) {
             var payload = json.convert(appointment);
             if (payload is json) {
-                response.setJsonPayload(untaint payload);
-                sendResponse(caller, response);
+                util:sendResponse(caller, payload);
             } else {
-                response.statusCode = 502;
-                response.setPayload("Invalid payload received");
-                sendResponse(caller, response);
+                log:printError("Error occurred when converting appointment record to JSON.", err = payload);
+                util:sendResponse(caller, json.convert("Internal error occurred."), 
+                                                    statusCode = http:INTERNAL_SERVER_ERROR_500);
             }
         } else {
-            string payload = "Error. There is no appointment with appointment number " + id;
-            response.setPayload(untaint payload);
-            sendResponse(caller, response);
+            log:printInfo("User error in getAppointment: There is no appointment with appointment number " 
+                                + appointmentId);
+            util:sendResponse(caller, "Error. There is no appointment with appointment number " + appointmentId, 
+                                statusCode = 400);
         }
     }
 
     @http:ResourceConfig {
         methods: ["GET"],
-        path: "/appointments/validity/{appointment_id}"
+        path: "/appointments/validity/{appointmentId}"
     }
-    resource function getAppointmentValidityTime(http:Caller caller, http:Request req, string id) {
-        http:Response response = new;
-        // HospitalService hospitalService = new;
-        // daos:Appointment? appointment = hospitalService.getAppointments()[id];
-        daos:Appointment? appointment = appointments[id];
+    resource function getAppointmentValidityTime(http:Caller caller, http:Request req, string appointmentId) {
+        daos:Appointment? appointment = self.appointments[appointmentId];
         int diffDays = 0;
         if (appointment is daos:Appointment) {
-            var date = time:parse(<string>appointment["time"], "yyyy-MM-dd");
+            var date = time:parse(<string>appointment["appointmentDate"], "yyyy-MM-dd");
             if (date is time:Time) {
                 time:Time today = time:currentTime();
                 diffDays = (date.time - today.time) / (24 * 60 * 60 * 1000);
-                response.setJsonPayload(untaint diffDays);
-                sendResponse(caller, response);
+                util:sendResponse(caller, diffDays);
             } else {
-                string payload = "Error. Invalid date for appointment number " + id;
-                response.setPayload(untaint payload);
-                sendResponse(caller, response);
+                log:printError("Invalid date in the appointent with ID: " + appointmentId, err = date);
+                util:sendResponse(caller, "Internal error occurred.", statusCode = http:INTERNAL_SERVER_ERROR_500);
             }
         } else {
-            string payload = "Error. There is no appointment with appointment number " + id;
-            response.setPayload(untaint payload);
-            sendResponse(caller, response);
+            log:printInfo("User error in getAppointment: There is no appointment with appointment number " 
+                                + appointmentId);
+            util:sendResponse(caller, "Error.Could not Find the Requested appointment ID", statusCode = 400);
         }
     }
 
     @http:ResourceConfig {
         methods: ["DELETE"],
-        path: "/appointments/{appointment_id}"
+        path: "/appointments/{appointmentId}"
     }
-    resource function removeAppointment(http:Caller caller, http:Request req, string id) {
-        http:Response response = new;
-        // HospitalService hospitalService = new;
-        string payload;
-        // if (hospitalService.getAppointments().remove(id)) {
-        if (appointments.remove(id)) {
-            payload = "Appointment is successfully removed";
+    resource function removeAppointment(http:Caller caller, http:Request req, string appointmentId) {
+        if(self.appointments.remove(appointmentId)) {
+            util:sendResponse(caller, "Appointment is successfully removed.");
         } else {
-            payload = "Error. Failed to remove appoitment with appointment number " + id;
+            log:printInfo("Failed to remove appoitment with appointment number " + appointmentId);
+            util:sendResponse(caller, "Failed to remove appoitment with appointment number " + appointmentId, 
+                                            statusCode = 400);
         }
-        response.setPayload(untaint payload);
-        sendResponse(caller, response);
     }
 
     @http:ResourceConfig {
         methods: ["POST"],
         path: "/payments"
     }
-    resource function settlePayment(http:Caller caller, http:Request req) returns error? {
-        http:Response response = new;
-        string payload;
+    resource function settlePayment(http:Caller caller, http:Request req) {
         var paymentSettlementDetails = req.getJsonPayload();
         if (paymentSettlementDetails is json) {
             daos:PaymentSettlement paymentSettlement = {
@@ -153,56 +149,68 @@ service HealthcareService on httpListener {
             };
 
             if (<int>paymentSettlement["appointmentNumber"] >= 0) {
-                daos:Payment payment = check util:createNewPaymentEntry(paymentSettlement, untaint healthcareDao);
-                payment["status"] = "Settled";
-                healthcareDao["payments"][<string>payment["paymentID"]] = untaint payment;
-                payload = "Settled payment successfully with payment ID: " + <string>payment["paymentID"];
+                daos:Payment|error payment = util:createNewPaymentEntry(paymentSettlement, untaint self.healthcareDao);
+                if(payment is daos:Payment) {
+                    payment["status"] = "Settled";
+                    self.healthcareDao["payments"][<string>payment["paymentID"]] = payment;
+                    util:sendResponse(caller, "Settled payment successfully with payment ID: " 
+                                                                        + <string>payment["paymentID"]);
+                } else {
+                    log:printError("User error Invalid payload recieved, payload: ", err = payment);
+                    util:sendResponse(caller, "Invalid payload recieved, " + payment.reason(), statusCode = 400);
+                }
             } else {
-                payload = "Error. Could not Find the Requested appointment ID.";
+                log:printError("Could not Find the Requested appointment ID: " 
+                                    + <int>paymentSettlementDetails["appointmentNumber"]);
+                util:sendResponse(caller, "Error. Could not Find the Requested appointment ID.", statusCode = 400);
             }
-            response.setPayload(untaint payload);
-            sendResponse(caller, response);
         } else {
-            response.statusCode = 400;
-            response.setPayload("Invalid payload received");
-            sendResponse(caller, response);
+            util:sendResponse(caller, "Invalid payload received", statusCode = 400);
         }
     }
 
     @http:ResourceConfig {
         methods: ["GET"],
-        path: "/payments/payment/{payment_id}"
+        path: "/payments/payment/{paymentId}"
     }
-    resource function getPaymentDetails(http:Caller caller, http:Request req, string paymentId) returns error? {
-        json payload;
-        http:Response response = new;
-        var payment = healthcareDao["payments"][paymentId];
+    resource function getPaymentDetails(http:Caller caller, http:Request req, string paymentId) {
+        var payment = self.healthcareDao["payments"][paymentId];
         if (payment is daos:Payment) {
-            payload = check json.convert(payment);
+            json|error payload = json.convert(payment);
+            if (payload is json) {
+                util:sendResponse(caller, payload);
+            } else {
+                log:printError("Error occurred getPaymentDetails when converting Payment to JSON.", err = payload);
+                util:sendResponse(caller, "Intrenal error occurred.", statusCode = http:INTERNAL_SERVER_ERROR_500);
+            }
         } else {
-            payload = json.convert("Invalid payment id provided");
+            log:printInfo("User error in getPaymentDetails, Invalid payment id provided: " + paymentId);
+            util:sendResponse(caller, "Invalid payment id provided", statusCode = 400);
         }
-        response.setPayload(untaint payload);
-        sendResponse(caller, response);
     }
 
     @http:ResourceConfig {
         methods: ["POST"],
         path: "/admin/newdoctor"
     }
-    resource function addNewDoctor(http:Caller caller, http:Request req) returns error? {
-        json payload;
-        http:Response response = new;
+    resource function addNewDoctor(http:Caller caller, http:Request req) {
         var doctorDetails = req.getJsonPayload();
         if (doctorDetails is json) {
             string category = <string>doctorDetails["category"];
-            if (!util:containsStringElement(<string[]>healthcareDao["categories"], category)) {
-                string[] a = <string[]>healthcareDao["categories"];
+            //if category is not in the list, adding it to the list
+            if (!util:containsStringElement(<string[]>self.healthcareDao["categories"], category)) {
+                string[] a = <string[]>self.healthcareDao["categories"];
                 a[a.length()] = category;
-                healthcareDao["categories"] = a;
+                self.healthcareDao["categories"] = a;
             }
-            var doctor = daos:findDoctorByNameFromHelathcareDao(untaint healthcareDao, <string>doctorDetails["name"]);
+
+            var doctor = daos:findDoctorByNameFromHelathcareDao(untaint self.healthcareDao, 
+                                                                        <string>doctorDetails["name"]);
+            //Adding the new doctor
             if (doctor is daos:Doctor) {
+                log:printInfo("User error in addNewDoctor: Doctor Already Exists in the system.");
+                util:sendResponse(caller, "Doctor Already Exist in the system", statusCode = 400);
+            } else {
                 daos:Doctor doc = {
                     name: <string>doctorDetails["name"],
                     hospital: <string>doctorDetails["hospital"],
@@ -210,24 +218,11 @@ service HealthcareService on httpListener {
                     availability: <string>doctorDetails["availability"],
                     fee: <float>doctorDetails["fee"]
                 };
-                healthcareDao["doctorsList"][<int>healthcareDao["doctorsList"].length()] = doc;
-                payload = json.convert("New Doctor Added Successfully");
-            } else {
-                payload = json.convert("Doctor Already Exist in the system");
+                self.healthcareDao["doctorsList"][<int>self.healthcareDao["doctorsList"].length()] = doc;
+                util:sendResponse(caller, "New Doctor Added Successfully");
             }
-            response.setPayload(payload);
-            sendResponse(caller, response);
         } else {
-            response.statusCode = 400;
-            response.setPayload("Invalid payload received");
-            sendResponse(caller, response);
+            util:sendResponse(caller, "Invalid payload received", statusCode = 400);
         }
-    }
-}
-
-function sendResponse(http:Caller caller, http:Response response) {
-    var result = caller->respond(response);
-    if (result is error) {
-        log:printError("Error sending response", err = result);
     }
 }

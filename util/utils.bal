@@ -5,6 +5,7 @@ import ballerina/time;
 import ballerina/log;
 
 int appointmentNo = 1;
+type CannotConvertError error<string>;
 
 public function sendResponse(http:Caller caller, json|string payload, int statusCode = 200) {
     http:Response response = new;
@@ -44,23 +45,31 @@ public function convertJsonToStringArray(json[] array) returns string[] {
 }
 
 public function createNewPaymentEntry(daos:PaymentSettlement paymentSettlement, daos:HealthcareDao healthcareDao) 
-                                            returns daos:Payment | error {
-    int discount = check checkForDiscounts(<string>paymentSettlement["patient"]["dob"]);
-    string doctorName = <string>paymentSettlement["doctor"]["name"];
-    daos:Doctor doctor = check daos:findDoctorByNameFromHelathcareDao(healthcareDao, doctorName);
-    float discounted = (<float>doctor["fee"] / 100) * (100 - discount);
+                                            returns daos:Payment|error {
+    int|error discount = checkForDiscounts(<string>paymentSettlement["patient"]["dob"]);
+    if(discount is int) {
+        string doctorName = <string>paymentSettlement["doctor"]["name"];
+        daos:Doctor|error doctor = daos:findDoctorByNameFromHelathcareDao(healthcareDao, doctorName);
+        if(doctor is daos:Doctor){
+            float discounted = (<float>doctor["fee"] / 100) * (100 - discount);
 
-    daos:Payment payment = {
-        appointmentNo: <int>paymentSettlement["appointmentNo"],
-        doctorName: <string>paymentSettlement["doctor"]["name"],
-        patient: <string>paymentSettlement["patient"]["name"],
-        actualFee: <float>doctor["fee"],
-        discount: discount: 0,
-        discounted: discounted: 0.0,
-        paymentID: system:uuid(),
-        status: ""
-    };
-    return payment;
+            daos:Payment payment = {
+                appointmentNo: <int>paymentSettlement["appointmentNumber"],
+                doctorName: <string>paymentSettlement["doctor"]["name"],
+                patient: <string>paymentSettlement["patient"]["name"],
+                actualFee: <float>doctor["fee"],
+                discount: discount: 0,
+                discounted: discounted: 0.0,
+                paymentID: system:uuid(),
+                status: ""
+            };
+            return payment;
+        } else {
+            return doctor;
+        }
+    } else {
+        return discount;
+    }
 }
 
 public function makeNewAppointment(daos:AppointmentRequest appointmentRequest, daos:HospitalDAO hospitalDao) 
@@ -74,7 +83,8 @@ public function makeNewAppointment(daos:AppointmentRequest appointmentRequest, d
             doctor: doc,
             patient: appointmentRequest.patient,
             fee: doc.fee,
-            confirmed: false
+            confirmed: false,
+            appointmentDate: appointmentRequest.appointmentDate
         };
         appointmentNo = appointmentNo + 1;
         return appointment;
@@ -85,16 +95,21 @@ public function makeNewAppointment(daos:AppointmentRequest appointmentRequest, d
 #
 # + dob - dob Parameter date of birth as a string in yyyy-MM-dd format 
 # + return - Return Value discount value
-public function checkForDiscounts(string dob) returns int | error {
-    int yob = check int.convert(dob.split("-")[0]);
-    int currentYear = time:getYear(time:currentTime());
-    int age = currentYear - yob;
-    if (age < 12) {
-        return 15;
-    } else if (age > 55) {
-        return 20;
+public function checkForDiscounts(string dob) returns int|error {
+    int|error yob = int.convert(dob.split("-")[0]);
+    if(yob is int) {
+        int currentYear = time:getYear(time:currentTime());
+        int age = currentYear - yob;
+        if (age < 12) {
+            return 15;
+        } else if (age > 55) {
+            return 20;
+        } else {
+            return 0;
+        }
     } else {
-        return 0;
+        CannotConvertError err = error("Invalid Date of birth:" + dob);
+        return err;
     }
 }
 

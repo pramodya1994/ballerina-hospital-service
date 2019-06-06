@@ -26,7 +26,7 @@ function reserveAppointment(http:Caller caller, http:Request req, daos:HospitalD
         if (util:containsStringElement(<string[]>hospitalDao["categories"], category)) {
             var appointment = util:makeNewAppointment(appointmentRequest, hospitalDao);
             if (appointment is daos:Appointment) {
-                appointments[string.convert(<int>appointment["appointmentNumber"])] = appointment;
+                HealthcareService.appointments[string.convert(<int>appointment["appointmentNumber"])] = appointment;
                 //add patient to the patient map
                 hospitalDao["patientMap"][<string>appointmentRequest["patient"]["ssn"]] = 
                                                                 <daos:Patient>appointmentRequest["patient"];
@@ -67,7 +67,7 @@ function reserveAppointment(http:Caller caller, http:Request req, daos:HospitalD
 }
 
 function getAppointment(http:Caller caller, http:Request req, int appointmentNo) {
-    var appointment = appointments[string.convert(appointmentNo)];
+    var appointment = HealthcareService.appointments[string.convert(appointmentNo)];
     if (appointment is daos:Appointment) {
         var appointmentJson = json.convert(appointment);
         if (appointmentJson is json) {
@@ -83,9 +83,9 @@ function getAppointment(http:Caller caller, http:Request req, int appointmentNo)
 }
 
 function checkChannellingFee(http:Caller caller, http:Request req, int id) {
-    if (util:containsAppointmentId(appointments, string.convert(id))) {
-        daos:Patient patient = <daos:Patient>appointments[string.convert(id)]["patient"];
-        daos:Doctor doctor = <daos:Doctor>appointments[string.convert(id)]["doctor"];
+    if (util:containsAppointmentId(HealthcareService.appointments, string.convert(id))) {
+        daos:Patient patient = <daos:Patient>HealthcareService.appointments[string.convert(id)]["patient"];
+        daos:Doctor doctor = <daos:Doctor>HealthcareService.appointments[string.convert(id)]["doctor"];
 
         daos:ChannelingFee channelingFee = {
             patientName: <string>patient["name"],
@@ -164,7 +164,7 @@ function getPatientRecord(http:Caller caller, http:Request req, daos:HospitalDAO
 }
 
 function isEligibleForDiscount(http:Caller caller, http:Request req, int id) {
-    var appointment = appointments[string.convert(id)];
+    var appointment = HealthcareService.appointments[string.convert(id)];
     if (appointment is daos:Appointment) {
         var eligible = util:checkDiscountEligibility(<string>appointment["patient"]["dob"]);
         if (eligible is boolean) {
