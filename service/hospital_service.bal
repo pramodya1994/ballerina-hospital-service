@@ -3,17 +3,6 @@ import util;
 import ballerina/log;
 import ballerina/io;
 
-// daos:HospitalDAO hospitalDao = {
-//     doctorsList: [],
-//     catergories: ["surgery", "cardiology", "gynaecology", "ent", "paediatric"],
-//     patientMap: {
-
-//     },
-//     patientRecordMap: {
-
-//     }
-// };
-
 function reserveAppointment(http:Caller caller, http:Request req, daos:HospitalDAO hospitalDao, string category) {
     http:Response response = new;
     json payload;
@@ -66,7 +55,7 @@ function reserveAppointment(http:Caller caller, http:Request req, daos:HospitalD
                     payload = json.convert("Internal error occurred.");
                 }
             } else {
-                payload = json.convert("Doctor " + <string>appointmentRequest["doctor"] + "is not available in " + <string>appointmentRequest["hospital"]);
+                payload = json.convert("Doctor " + <string>appointmentRequest["doctor"] + " is not available in " + <string>appointmentRequest["hospital"]);
             }
         } else {
             payload = json.convert("Invalid Category");

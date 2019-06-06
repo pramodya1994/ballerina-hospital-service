@@ -3,12 +3,18 @@ name = "pramodya"
 version = "0.0.1"
 lockfileversion = "1"
 ballerinaversion = "0.991.0"
-modules = [ "util" ]
+modules = [ "service" ]
 
 [[module]] 
 org = "pramodya"
 name = "daos"
 version = "0.0.1"
+
+[[module]] 
+org = "pramodya"
+name = "service"
+version = "0.0.1"
+imports = [{org="pramodya", name="daos",version="0.0.1"},{org="pramodya", name="util",version="0.0.1"}]
 
 [[module]] 
 org = "pramodya"

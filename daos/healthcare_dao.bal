@@ -1,3 +1,5 @@
+type DoctorNotFoundError error<string>;
+
 public type HealthcareDao record {
     Doctor[] doctorsList = [];
     string[] catergories = [];
@@ -30,22 +32,20 @@ public type ChannelingFee record {
     string actualFee;
 };
 
-type DoctorNotFoundError error<string>;
-
 public function findDoctorByCategoryFromHealthcareDao(HealthcareDao healthcareDao, string category) returns Doctor[] {
     Doctor[] list = [];
-    foreach var d in healthcareDao.doctorsList {
-        if (category.equalsIgnoreCase(d.category)){
-            list[list.length()] = d;     
+    foreach var doctor in healthcareDao.doctorsList {
+        if (category.equalsIgnoreCase(doctor.category)){
+            list[list.length()] = doctor;     
         }
     }
     return list;
 }
 
 public function findDoctorByNameFromHelathcareDao(HealthcareDao healthcareDao, string name) returns Doctor|DoctorNotFoundError {
-    foreach var d in healthcareDao.doctorsList {
-        if (name.equalsIgnoreCase(d.name)) {
-            return d;
+    foreach var doctor in healthcareDao.doctorsList {
+        if (name.equalsIgnoreCase(doctor.name)) {
+            return doctor;
         }
     }
     string errorReason = "Doctor Not Found: " + name;
